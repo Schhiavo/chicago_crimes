@@ -56,10 +56,3 @@ atributos as (
 )
 
 select * from atributos
-
-union all
-
-select
-    -1, null, -1, -1, -1, -1, -1, -1, -1,
-    'Não informado', 'Não informado', 'Não informado', 'Não informado',
-    false, false

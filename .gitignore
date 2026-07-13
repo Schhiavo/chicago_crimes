@@ -234,3 +234,7 @@ profiles.yml
 # Dados brutos (>1 GB)
 data/
 *.csv
+
+#Power BI - arquivo muito grande e o git não está aceitando o push
+*.pbix
+*.pbit

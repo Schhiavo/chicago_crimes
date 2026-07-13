@@ -43,7 +43,3 @@ select
     make_date(ano, numero_mes, 1)           as primeiro_dia_mes,
     flag_ano_parcial                        as flag_ano_parcial
 from meses
-
-union all
-
-select -1, 'Não informado', -1, -1, -1, 'Não informado', 'Não informado', 'Não informado', null, false
