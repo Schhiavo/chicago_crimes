@@ -1,0 +1,338 @@
+version: 2
+
+models:
+
+  # ============================================================
+  # P1 — OCORRÊNCIAS CRIMINAIS (fato transacional)
+  # ============================================================
+
+  - name: fct_ocorrencias
+    description: >
+      Fato transacional. Grão: uma linha por ocorrência criminal reportada ao CPD.
+      ~8,59 milhões de linhas cobrindo 2001–2026.
+      Joins com dim_crime e dim_geografia são TEMPORAIS (BETWEEN valido_de/valido_ate),
+      pois ambas são SCD Tipo 2.
+    columns:
+      - name: sk_ocorrencia
+        description: "Chave primária do fato."
+        tests: [not_null, unique]
+
+      - name: id_ocorrencia
+        description: "Dimensão degenerada. Chave natural da ocorrência na fonte."
+        tests: [not_null, unique]
+
+      - name: case_number
+        description: "Dimensão degenerada. Número do caso no CPD."
+
+      - name: sk_data
+        description: "FK para dim_data. -1 quando a data é inválida."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_data')
+              field: sk_data
+
+      - name: sk_hora
+        description: "FK para dim_hora."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_hora')
+              field: sk_hora
+
+      - name: sk_crime
+        description: "FK para dim_crime (SCD 2). Aponta para a versão vigente na data da ocorrência."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_crime')
+              field: sk_crime
+
+      - name: sk_geografia
+        description: "FK para dim_geografia (SCD 2). Aponta para a versão vigente na data da ocorrência."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_geografia')
+              field: sk_geografia
+
+      - name: sk_local
+        description: "FK para dim_local. -1 para as 16.309 ocorrências sem descrição de local."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_local')
+              field: sk_local
+
+      - name: sk_flags
+        description: "FK para dim_flags (junk dimension)."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_flags')
+              field: sk_flags
+
+      - name: qtd_ocorrencia
+        description: "Medida aditiva. Sempre 1 — permite SUM em vez de COUNTROWS."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1]
+              quote: false
+
+      - name: qtd_prisao
+        description: "Medida aditiva. 1 se houve prisão, 0 caso contrário."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [0, 1]
+              quote: false
+
+      - name: qtd_domestico
+        description: "Medida aditiva. 1 se violência doméstica, 0 caso contrário."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [0, 1]
+              quote: false
+
+      - name: latitude
+        description: "Latitude WGS84. Nula em 97.005 ocorrências (1,13%)."
+
+      - name: longitude
+        description: "Longitude WGS84. Nula em 97.005 ocorrências (1,13%)."
+
+
+  - name: dim_data
+    description: "Dimensão Data. Grão: dia. SCD Tipo 1. Gerada para 2001-01-01 a 2026-12-31."
+    columns:
+      - name: sk_data
+        description: "Chave substituta no formato YYYYMMDD. -1 = membro substituto."
+        tests: [not_null, unique]
+      - name: data_completa
+        description: "Data no formato DATE."
+      - name: ano
+        description: "Ano. Nível superior da hierarquia Ano → Trimestre → Mês → Dia."
+      - name: trimestre
+        description: "Trimestre (1–4)."
+      - name: numero_mes
+        description: "Mês (1–12)."
+      - name: nome_mes
+        description: "Nome do mês por extenso, em português."
+      - name: nome_dia_semana
+        description: "Dia da semana por extenso, em português."
+      - name: flag_fim_de_semana
+        description: "Verdadeiro para sábado e domingo."
+      - name: flag_ano_parcial
+        description: >
+          Verdadeiro para 2026. A fonte contém apenas 113.835 registros desse ano
+          (ano em curso). Relatórios de tendência devem excluí-lo ou sinalizá-lo.
+
+
+  - name: dim_hora
+    description: "Dimensão Hora. Grão: hora do dia (0–23). SCD Tipo 1."
+    columns:
+      - name: sk_hora
+        description: "Chave substituta = hora (0–23). -1 = membro substituto."
+        tests: [not_null, unique]
+      - name: periodo_do_dia
+        description: "Madrugada, Manhã, Tarde ou Noite."
+      - name: flag_noturno
+        description: "Verdadeiro entre 22h e 5h."
+
+
+  - name: dim_crime
+    description: >
+      Dimensão Crime. Grão: IUCR × versão. SCD TIPO 2.
+      Captura a padronização de nomenclatura do CPD ocorrida em 2019–2020:
+      180 dos 418 IUCRs (43%) mudaram a redação de `description`
+      (ex.: "ARMED: HANDGUN" → "ARMED - HANDGUN").
+      O código IUCR e o fbi_code permaneceram estáveis (0 divergências),
+      confirmando que a mudança é de rótulo, não de classificação.
+    columns:
+      - name: sk_crime
+        description: "Chave substituta da versão."
+        tests: [not_null, unique]
+      - name: iucr
+        description: "Chave natural. Illinois Uniform Crime Reporting code."
+        tests: [not_null]
+      - name: description
+        description: >
+          Redação VIGENTE À ÉPOCA do registro. Use para fidelidade histórica.
+          NÃO agrupe por esta coluna — partiria o mesmo crime em duas séries.
+      - name: description_atual
+        description: >
+          Redação CORRENTE do mesmo IUCR. Use para agregação consistente
+          ao longo de toda a série temporal.
+      - name: fbi_code
+        description: "Classificação NIBRS. Determinado funcionalmente pelo IUCR."
+      - name: categoria_analitica
+        description: "Recorte de negócio: Crime violento, Crime patrimonial, Entorpecentes, Armas, Outros."
+      - name: valido_de
+        description: "Início da vigência desta versão (SCD 2)."
+        tests: [not_null]
+      - name: valido_ate
+        description: "Fim da vigência. 9999-12-31 para a versão corrente."
+        tests: [not_null]
+      - name: flag_versao_atual
+        description: "Verdadeiro para a versão vigente do IUCR."
+
+
+  - name: dim_geografia
+    description: >
+      Dimensão Geografia. Grão: beat × versão. SCD TIPO 2.
+      Captura a consolidação distrital de 2012 (desativação dos distritos 13, 21 e 23).
+      A FONTE aplicou SCD Tipo 1 — sobrescreveu o district histórico pelo atual,
+      perdendo o histórico. Esta dimensão o RECUPERA.
+      Hierarquia principal: District → Beat.
+      Ward e Community Area são recortes alternativos, NÃO aninhados
+      (as fronteiras cruzam as dos distritos policiais).
+    columns:
+      - name: sk_geografia
+        description: "Chave substituta da versão."
+        tests: [not_null, unique]
+      - name: beat
+        description: "Chave natural. Menor unidade de patrulhamento."
+        tests: [not_null]
+      - name: district
+        description: >
+          Distrito HISTÓRICO — o que de fato cobria o beat à época do registro.
+          Use para séries temporais fiéis. É a informação que a fonte perdeu.
+      - name: district_atual
+        description: "Distrito VIGENTE. Use para comparações sob a estrutura organizacional atual."
+      - name: ward
+        description: >
+          Distrito eleitoral. ATENÇÃO: não capturado em 2001 (99,1% nulo) e
+          parcial em 2002 (27,3% nulo). Análises por ward devem filtrar a partir de 2003.
+      - name: community_area
+        description: "Área comunitária (1–77). Mesma limitação de cobertura do ward."
+      - name: flag_distrito_reorganizado
+        description: "Verdadeiro para os beats afetados pela consolidação de 2012."
+      - name: valido_de
+        tests: [not_null]
+      - name: valido_ate
+        tests: [not_null]
+
+
+  - name: dim_local
+    description: "Dimensão Local. Grão: tipo de local. SCD Tipo 1. 218 valores distintos na fonte."
+    columns:
+      - name: sk_local
+        tests: [not_null, unique]
+      - name: descricao_local
+        description: "Descrição do tipo de local, como consta na fonte."
+      - name: categoria_local
+        description: "Agrupamento analítico: Residencial, Via pública, Comercial, etc."
+
+
+  - name: dim_flags
+    description: >
+      Junk dimension. Grão: combinação de flags. 4 linhas (2 × 2).
+      Consolida os booleanos Arrest e Domestic, que não têm afinidade com
+      nenhuma outra dimensão.
+    columns:
+      - name: sk_flags
+        tests: [not_null, unique]
+      - name: descricao_combinada
+        description: "Rótulo legível da combinação (ex.: 'Doméstico sem prisão')."
+
+
+  # ============================================================
+  # P2 — DESEMPENHO MENSAL (fato agregado)
+  # ============================================================
+
+  - name: fct_desempenho_mensal
+    description: >
+      Fato agregado (periodic snapshot). Grão: mês × distrito × tipo primário de crime.
+      ~250 mil linhas. Construído por agregação de fct_ocorrencias — garante
+      consistência entre os dois fatos (drill-across válido).
+      NÃO armazena taxa_prisao: taxas são NÃO-ADITIVAS e devem ser calculadas
+      em DAX no momento da consulta.
+    columns:
+      - name: sk_mes
+        description: "FK para dim_mes (dimensão conformada encolhida)."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_mes')
+              field: sk_mes
+
+      - name: sk_distrito
+        description: "FK para dim_distrito (dimensão conformada encolhida)."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_distrito')
+              field: sk_distrito
+
+      - name: sk_tipo_crime
+        description: "FK para dim_tipo_crime (dimensão conformada encolhida)."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_tipo_crime')
+              field: sk_tipo_crime
+
+      - name: qtd_ocorrencias
+        description: "Medida aditiva. Total de ocorrências no mês/distrito/tipo."
+        tests: [not_null]
+
+      - name: qtd_prisoes
+        description: "Medida aditiva. Numerador da taxa de prisão."
+        tests: [not_null]
+
+      - name: qtd_domesticos
+        description: "Medida aditiva. Ocorrências classificadas como violência doméstica."
+        tests: [not_null]
+
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - sk_mes
+            - sk_distrito
+            - sk_tipo_crime
+
+
+  - name: dim_mes
+    description: >
+      SHRUNKEN CONFORMED DIMENSION de dim_data. Grão: mês. SCD Tipo 1.
+      Necessária porque o fato P2 tem grão mensal — ligá-lo a dim_data
+      (grão diário) multiplicaria as medidas por ~30.
+    columns:
+      - name: sk_mes
+        description: "Chave substituta no formato AAAAMM."
+        tests: [not_null, unique]
+      - name: ano
+        description: "Conformado com dim_data.ano — mesma semântica, permite drill-across."
+      - name: flag_ano_parcial
+        description: "Verdadeiro para 2026 (ano incompleto na fonte)."
+
+
+  - name: dim_distrito
+    description: >
+      SHRUNKEN CONFORMED DIMENSION de dim_geografia. Grão: distrito × versão. SCD Tipo 2.
+      Necessária porque o fato P2 tem grão distrital — ligá-lo a dim_geografia
+      (grão beat) multiplicaria as medidas por ~12.
+      Mantém SCD 2 porque o próprio conjunto de distritos mudou em 2012.
+    columns:
+      - name: sk_distrito
+        tests: [not_null, unique]
+      - name: district
+        description: "Conformado com dim_geografia.district."
+      - name: flag_distrito_desativado
+        description: "Verdadeiro para os distritos 13, 21 e 23, extintos em 2012."
+
+
+  - name: dim_tipo_crime
+    description: >
+      SHRUNKEN CONFORMED DIMENSION de dim_crime. Grão: primary_type. SCD Tipo 1.
+      Necessária porque o fato P2 tem grão de tipo primário — ligá-lo a dim_crime
+      (grão IUCR) multiplicaria as medidas.
+      Usa primary_type_atual para garantir comparabilidade da série temporal.
+    columns:
+      - name: sk_tipo_crime
+        tests: [not_null, unique]
+      - name: primary_type
+        description: "Conformado com dim_crime.primary_type_atual."
+      - name: categoria_analitica
+        description: "Conformado com dim_crime.categoria_analitica."
