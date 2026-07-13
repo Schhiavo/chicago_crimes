@@ -1,0 +1,55 @@
+version: 2
+
+models:
+  - name: stg_crimes
+    description: >
+      Camada de staging. Aplica cast de tipos, limpeza e padronização sobre
+      raw.crimes_raw. Materializada como tabela (não view) por questão de
+      desempenho: 8,59 milhões de linhas com to_timestamp e regexp_replace
+      seriam reprocessadas a cada consulta se fosse view.
+
+      Decisão de projeto: os campos geográficos são convertidos para INT,
+      eliminando os zeros à esquerda da fonte ('004' -> 4, '0421' -> 421).
+      Sem esse cast, '004' e '4' virariam chaves distintas nas dimensões.
+
+      Não descarta linhas com dimensões nulas — essas recebem membro
+      substituto (-1) na camada de marts. Descartá-las subestimaria as
+      contagens (ex.: os 614.813 registros sem ward).
+    columns:
+      - name: id_ocorrencia
+        description: "Chave natural da ocorrência. Verificado: 0 duplicatas em 8.591.649 registros."
+        tests: [not_null, unique]
+
+      - name: data_hora_ocorrencia
+        description: "Timestamp da ocorrência, convertido do formato americano MM/DD/YYYY HH12:MI:SS AM."
+        tests: [not_null]
+
+      - name: iucr
+        description: "Código IUCR normalizado (upper + trim)."
+        tests: [not_null]
+
+      - name: beat
+        description: "Beat como inteiro (zeros à esquerda removidos)."
+
+      - name: district
+        description: "Distrito como inteiro. 47 registros nulos na fonte."
+
+      - name: ward
+        description: "Ward como inteiro. 614.813 nulos — ausente em 2001, parcial em 2002."
+
+      - name: community_area
+        description: "Área comunitária como inteiro. 613.724 nulos, mesmo padrão do ward."
+
+      - name: flag_prisao
+        description: "Booleano derivado do campo Arrest."
+        tests: [not_null]
+
+      - name: flag_domestico
+        description: "Booleano derivado do campo Domestic."
+        tests: [not_null]
+
+      - name: latitude
+        description: "Latitude WGS84. 97.005 nulos (1,13%)."
+
+      - name: longitude
+        description: "Longitude WGS84. 97.005 nulos (1,13%)."
