@@ -39,30 +39,36 @@ with ocorrencias as (
 fato as (
 
     select
+        -- Chave substituta do fato
         o.id_ocorrencia                         as sk_ocorrencia,
 
+        -- Dimensões degeneradas (permanecem no fato, sem dimensão própria)
         o.id_ocorrencia                         as id_ocorrencia,
         o.case_number                           as case_number,
 
         -- Chaves estrangeiras
         coalesce(d.sk_data,      -1)            as sk_data,
         coalesce(h.sk_hora,      -1)            as sk_hora,
-        coalesce(c.sk_crime,     -1)            as sk_crime,
-        coalesce(g.sk_geografia, -1)            as sk_geografia,
-        coalesce(l.sk_local,     -1)            as sk_local,
+        coalesce(c.sk_crime,     '-1')            as sk_crime,
+        coalesce(g.sk_geografia, '-1')            as sk_geografia,
+        coalesce(l.sk_local,     '-1')            as sk_local,
         f.sk_flags                              as sk_flags,
 
+        -- Atributos geoespaciais (mantidos no fato para uso em mapas do Power BI)
         o.latitude                              as latitude,
         o.longitude                             as longitude,
         o.data_hora_ocorrencia                  as data_hora_ocorrencia,
 
-
+        -- MEDIDAS
+        -- qtd_ocorrencia = 1 permite SUM em vez de COUNTROWS no DAX e torna
+        -- o cálculo de taxas trivial: SUM(qtd_prisao) / SUM(qtd_ocorrencia).
         1                                       as qtd_ocorrencia,
         case when o.flag_prisao    then 1 else 0 end as qtd_prisao,
         case when o.flag_domestico then 1 else 0 end as qtd_domestico
 
     from ocorrencias o
 
+    -- Dimensões SCD Tipo 1: join direto pela chave natural
     left join {{ ref('dim_data') }} d
         on o.data_ocorrencia = d.data_completa
 
@@ -76,6 +82,7 @@ fato as (
         on o.flag_prisao    = f.flag_prisao
        and o.flag_domestico = f.flag_domestico
 
+    -- Dimensões SCD Tipo 2: join pela chave natural E pela vigência temporal
     left join {{ ref('dim_crime') }} c
         on  o.iucr = c.iucr
         and o.data_hora_ocorrencia >= c.valido_de

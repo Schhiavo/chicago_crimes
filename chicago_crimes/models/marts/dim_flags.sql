@@ -26,7 +26,7 @@ with combinacoes as (
 dimensao as (
 
     select
-        {{ dbt_utils.generate_surrogate_key(['prisao', 'domestico']) }}::bigint as sk_flags,
+        {{ dbt_utils.generate_surrogate_key(['prisao', 'domestico']) }}::text as sk_flags,
 
         prisao                                  as flag_prisao,
         domestico                               as flag_domestico,

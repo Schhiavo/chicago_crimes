@@ -44,6 +44,7 @@ with ocorrencias as (
 
 ),
 
+-- Reduz cada FK do grão atômico ao grão agregado correspondente.
 rebaixado as (
 
     select
@@ -87,9 +88,10 @@ agregado as (
 
 select
     coalesce(m.sk_mes,        -1)               as sk_mes,
-    coalesce(dt.sk_distrito,  -1)               as sk_distrito,
-    coalesce(tc.sk_tipo_crime, -1)              as sk_tipo_crime,
+    coalesce(dt.sk_distrito,  '-1')               as sk_distrito,
+    coalesce(tc.sk_tipo_crime, '-1')              as sk_tipo_crime,
 
+    -- Medidas aditivas
     a.qtd_ocorrencias                           as qtd_ocorrencias,
     a.qtd_prisoes                               as qtd_prisoes,
     a.qtd_domesticos                            as qtd_domesticos,

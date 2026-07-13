@@ -22,11 +22,13 @@ with distritos as (
         valido_ate,
         flag_versao_atual
     from {{ ref('dim_geografia') }}
-    where sk_geografia <> -1
+    where sk_geografia <> '-1'
       and district is not null
 
 ),
 
+-- Um distrito pode aparecer em várias versões de beat com as mesmas datas.
+-- Consolida para o grão distrital.
 consolidado as (
 
     select
@@ -40,11 +42,12 @@ consolidado as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['district', 'valido_de']) }}::bigint as sk_distrito,
+    {{ dbt_utils.generate_surrogate_key(['district', 'valido_de']) }}::text as sk_distrito,
     district                                as district,
     lpad(district::text, 3, '0')            as district_formatado,
     'Distrito ' || district::text           as nome_district,
 
+    -- Distritos desativados na consolidação de 2012.
     (district in (13, 21, 23))              as flag_distrito_desativado,
 
     valido_de                               as valido_de,
@@ -54,5 +57,5 @@ from consolidado
 
 union all
 
-select -1, -1, 'N/D', 'Não informado', false,
+select '-1', -1, 'N/D', 'Não informado', false,
        '1900-01-01'::timestamp, '9999-12-31'::timestamp, true

@@ -18,10 +18,12 @@ with locais as (
 dimensao as (
 
     select
-        {{ dbt_utils.generate_surrogate_key(['location_description']) }}::bigint as sk_local,
+        {{ dbt_utils.generate_surrogate_key(['location_description']) }}::text as sk_local,
 
         location_description                    as descricao_local,
 
+        -- Agrupamento analítico: reduz 218 valores a poucas categorias de negócio,
+        -- viabilizando gráficos legíveis. Recorte não presente na fonte.
         case
             when location_description like '%RESIDENCE%'
               or location_description like '%APARTMENT%'
@@ -70,6 +72,7 @@ dimensao as (
             else 'Outros'
         end                                     as categoria_local,
 
+        -- Locais fechados tendem a ter subnotificação distinta dos abertos.
         (location_description like '%STREET%'
          or location_description like '%SIDEWALK%'
          or location_description like '%ALLEY%'
@@ -83,4 +86,4 @@ select * from dimensao
 
 union all
 
-select -1, 'Não informado', 'Não informado', false
+select '-1', 'Não informado', 'Não informado', false

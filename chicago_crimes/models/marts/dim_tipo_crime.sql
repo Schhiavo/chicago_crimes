@@ -20,14 +20,14 @@ with tipos as (
         primary_type_atual  as primary_type,
         categoria_analitica
     from {{ ref('dim_crime') }}
-    where sk_crime <> -1
+    where sk_crime <> '-1'
       and primary_type_atual is not null
       and primary_type_atual <> 'Não informado'
 
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['primary_type']) }}::bigint as sk_tipo_crime,
+    {{ dbt_utils.generate_surrogate_key(['primary_type']) }}::text as sk_tipo_crime,
     primary_type                            as primary_type,
     initcap(primary_type)                   as nome_tipo_crime,
     categoria_analitica                     as categoria_analitica,
@@ -36,4 +36,4 @@ from tipos
 
 union all
 
-select -1, 'N/D', 'Não informado', 'Não informado', false
+select '-1', 'N/D', 'Não informado', 'Não informado', false

@@ -42,6 +42,9 @@ distrito_corrente as (
 
 ),
 
+-- Ward e community_area não são funcionalmente determinados pelo beat
+-- (as fronteiras se cruzam). Elege-se o valor predominante por beat,
+-- apenas como atributo informativo da dimensão.
 atributos_predominantes as (
 
     select distinct on (beat)
@@ -59,24 +62,40 @@ atributos_predominantes as (
 dimensao as (
 
     select
-        {{ dbt_utils.generate_surrogate_key(['s.beat', 's.dbt_valid_from']) }}::bigint as sk_geografia,
+        {{ dbt_utils.generate_surrogate_key(['s.beat', 's.dbt_valid_from']) }}::text as sk_geografia,
 
         s.beat                                  as beat,
         lpad(s.beat::text, 4, '0')              as beat_formatado,
 
+        -- Distrito HISTÓRICO: o que de fato cobria o beat à época do registro.
+        -- A fonte perdeu essa informação ao aplicar SCD Tipo 1; o snapshot a recupera.
         s.district                              as district,
         lpad(s.district::text, 3, '0')          as district_formatado,
         'Distrito ' || s.district::text         as nome_district,
 
+        -- Distrito ATUAL: para comparações sob a estrutura organizacional vigente.
         d.district_atual                        as district_atual,
 
+        -- Recortes administrativos alternativos (não aninhados)
         a.ward                                  as ward,
         'Ward ' || a.ward::text                 as nome_ward,
         a.community_area                        as community_area,
 
+        -- Sinaliza os beats afetados pela consolidação de 2012.
         (s.district <> d.district_atual)        as flag_distrito_reorganizado,
 
-        s.dbt_valid_from                        as valido_de,
+        -- Controle SCD Tipo 2
+        --
+        -- BACKDATING DA VERSÃO INAUGURAL: ver comentário em dim_crime.sql.
+        -- O dbt carimba dbt_valid_from com o instante da execução do snapshot.
+        -- Sem retroagir a primeira versão, nenhuma ocorrência histórica casaria
+        -- no join temporal do fato.
+        case
+            when s.dbt_valid_from = v.primeira_execucao
+                then '1900-01-01'::timestamp
+            else s.dbt_valid_from
+        end                                     as valido_de,
+
         coalesce(s.dbt_valid_to, '9999-12-31'::timestamp) as valido_ate,
         (s.dbt_valid_to is null)                as flag_versao_atual
 
@@ -85,6 +104,10 @@ dimensao as (
         on s.beat = d.beat
     left join atributos_predominantes a
         on s.beat = a.beat
+    cross join (
+        select min(dbt_valid_from) as primeira_execucao
+        from snapshot_geo
+    ) v
 
 )
 
@@ -96,7 +119,7 @@ union all
 -- sem beat. NÃO descartar essas linhas do fato — descartá-las subestimaria
 -- as contagens totais.
 select
-    -1, -1, 'N/D', -1, 'N/D', 'Não informado', -1,
+    '-1', -1, 'N/D', -1, 'N/D', 'Não informado', -1,
     -1, 'Não informado', -1,
     false,
     '1900-01-01'::timestamp, '9999-12-31'::timestamp, true
