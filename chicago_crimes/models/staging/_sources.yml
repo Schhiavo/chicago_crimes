@@ -1,0 +1,57 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Fonte transacional — espelho do CSV público "Crimes 2001 to Present"
+      do Chicago Police Department, carregado via COPY. Todas as colunas são
+      TEXT por decisão de projeto: o CSV contém campos vazios em colunas
+      numéricas e valores com zeros à esquerda (ex.: district '004', beat '0421'),
+      que quebrariam a carga sob tipagem estrita. O cast é responsabilidade
+      da camada de staging.
+    database: chicago_crimes
+    schema: raw
+
+    tables:
+      - name: crimes_raw
+        description: "Uma linha por ocorrência criminal reportada. 8.591.649 registros (2001–2026)."
+        columns:
+          - name: id
+            description: "Identificador único da ocorrência. Chave natural."
+            tests:
+              - not_null
+              - unique
+          - name: case_number
+            description: "Número do caso no Records Division do CPD."
+          - name: date
+            description: "Data e hora da ocorrência (formato MM/DD/YYYY HH:MI:SS AM)."
+            tests:
+              - not_null
+          - name: iucr
+            description: "Illinois Uniform Crime Reporting code. Chave natural de dim_crime."
+            tests:
+              - not_null
+          - name: primary_type
+            description: "Categoria principal do crime. 34 valores distintos."
+          - name: description
+            description: >
+              Descrição secundária. ATENÇÃO: sofreu padronização de nomenclatura
+              em 2019–2020 (dois-pontos → hífen, abreviações expandidas).
+              Motiva o SCD Tipo 2 em dim_crime.
+          - name: fbi_code
+            description: "Classificação NIBRS. Determinado funcionalmente pelo IUCR (0 divergências)."
+          - name: beat
+            description: >
+              Menor unidade de patrulhamento (4 dígitos, com zeros à esquerda).
+              Os 2 primeiros dígitos indicam o district — exceto em registros
+              anteriores a 2012, devido à desativação dos distritos 13, 21 e 23.
+          - name: district
+            description: "Distrito policial (3 caracteres, com zeros à esquerda)."
+          - name: ward
+            description: "Distrito eleitoral. Não capturado em 2001 (99,1% nulo)."
+          - name: community_area
+            description: "Área comunitária (1–77). Não capturada em 2001."
+          - name: arrest
+            description: "Indica se houve prisão (true/false)."
+          - name: domestic
+            description: "Indica violência doméstica conforme o IL Domestic Violence Act."
