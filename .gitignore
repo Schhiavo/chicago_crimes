@@ -216,3 +216,21 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# Ambiente Python
+.venv/
+__pycache__/
+
+# dbt
+target/
+dbt_packages/
+logs/
+
+# Credenciais
+profiles.yml
+.env
+
+# Dados brutos (>1 GB)
+data/
+*.csv
